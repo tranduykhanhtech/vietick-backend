@@ -14,7 +14,7 @@
 
 ```sh
 ✅curl -X POST http://localhost:8080/api/v1/auth/register -H "Content-Type: application/json" -d "{\"username\":\"testuser\",\"email\":\"test@example.com\",\"password\":\"123456\",\"full_name\":\"Test User\"}" /
-curl -X POST http://localhost:8080/api/v1/auth/login -H "Content-Type: application/json" -d "{\"email\":\"test@example.com\",\"password\":\"123456\"}"
+curl -X POST https://vietick-backend.onrender.com/api/v1/auth/login -H "Content-Type: application/json" -d "{\"email\":\"test@example.com\",\"password\":\"123456\"}"
 curl -X POST http://localhost:8080/api/v1/auth/refresh -H "Content-Type: application/json" -d "{\"refresh_token\":\"{refresh_token}\"}"
 curl -X POST http://localhost:8080/api/v1/auth/verify-email -H "Content-Type: application/json" -d "{\"token\":\"{verify_token}\"}"
 curl -X POST http://localhost:8080/api/v1/auth/logout -H "Authorization: Bearer {token}"

@@ -129,7 +129,7 @@ func setupRouter(
 	router.Use(middleware.ErrorHandlingMiddleware())
 	router.Use(middleware.RequestIDMiddleware())
 	router.Use(middleware.SecurityHeadersMiddleware())
-	router.Use(middleware.CORSMiddleware())
+	router.Use(middleware.CORSMiddleware(&cfg.CORS))
 
 	// Global rate limiting
 	router.Use(middleware.GlobalRateLimitMiddleware())
@@ -141,6 +141,20 @@ func setupRouter(
 			"timestamp": time.Now().UTC(),
 			"service":   "vietick-backend",
 			"version":   version,
+		})
+	})
+
+	// Main website welcome page
+	// Use HTML rendering
+	router.LoadHTMLFiles("templates/index.html")
+
+	// Serve static files (css, js, images, ...) from templates folder
+	router.Static("/static", "./static")
+
+	router.GET("/", func(c *gin.Context) {
+		c.HTML(200, "index.html", gin.H{
+			"title":   "Welcome to VietTick Backend",
+			"version": version,
 		})
 	})
 

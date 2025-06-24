@@ -2,21 +2,16 @@ package middleware
 
 import (
 	"time"
+	"vietick-backend/internal/config"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
 // CORSMiddleware configures CORS settings for the API
-func CORSMiddleware() gin.HandlerFunc {
+func CORSMiddleware(cfg *config.CORSConfig) gin.HandlerFunc {
 	return cors.New(cors.Config{
-		AllowOrigins: []string{
-			"http://localhost:3000",    // React development server
-			"http://localhost:3001",    // Alternative React port
-			"https://vietick.com",      // Production frontend
-			"https://www.vietick.com",  // Production frontend with www
-			"https://app.vietick.com",  // App subdomain
-		},
+		AllowOrigins: cfg.AllowedOrigins,
 		AllowMethods: []string{
 			"GET",
 			"POST",

@@ -1,4 +1,5 @@
 # VietTick Backend
+# Domain: https://vietick-backend.onrender.com
 
 A comprehensive social media backend API built with Go, featuring user authentication, posts, comments, follows, and identity verification system for blue tick verification.
 

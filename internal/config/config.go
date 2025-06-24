@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -13,6 +14,7 @@ type Config struct {
 	Database DatabaseConfig
 	JWT      JWTConfig
 	Email    EmailConfig
+	CORS     CORSConfig
 }
 
 type ServerConfig struct {
@@ -42,6 +44,10 @@ type EmailConfig struct {
 	SMTPPassword string
 	FromEmail    string
 	FromName     string
+}
+
+type CORSConfig struct {
+	AllowedOrigins []string
 }
 
 func Load() *Config {
@@ -80,6 +86,19 @@ func Load() *Config {
 			FromEmail:    getEnv("FROM_EMAIL", "noreply@vietick.com"),
 			FromName:     getEnv("FROM_NAME", "VietTick"),
 		},
+		CORS: CORSConfig{
+			AllowedOrigins: getEnvAsSlice("CORS_ALLOWED_ORIGINS",
+				[]string{
+					"http://localhost:3000",
+					"http://localhost:3001",
+					"http://localhost:5173", // For vue/vite dev
+					"https://vietick.com",
+					"https://www.vietick.com",
+					"https://app.vietick.com",
+				},
+				",",
+			),
+		},
 	}
 }
 
@@ -88,4 +107,12 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func getEnvAsSlice(key string, defaultVal []string, separator string) []string {
+	valStr := getEnv(key, "")
+	if valStr == "" {
+		return defaultVal
+	}
+	return strings.Split(valStr, separator)
 }
