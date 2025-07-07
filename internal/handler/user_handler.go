@@ -138,38 +138,35 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 
 // SearchUsers godoc
 // @Summary Search users
-// @Description Search users by username or full name
-// @Tags users
+// @Description Search users by username, full_name, email
+// @Tags search
 // @Produce json
-// @Param q query string true "Search query"
+// @Param query query string true "Search keyword"
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
-// @Success 200 {object} model.FollowersResponse
-// @Failure 400 {object} middleware.ErrorResponse
-// @Security BearerAuth
-// @Router /users/search [get]
+// @Success 200 {object} map[string]interface{}
+// @Router /search/users [get]
 func (h *UserHandler) SearchUsers(c *gin.Context) {
-	query := c.Query("q")
+	query := c.Query("query")
 	if query == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Search query is required"})
+		c.JSON(400, gin.H{"error": "Missing query parameter"})
 		return
 	}
-
-	var pagination utils.PaginationParams
-	if err := c.ShouldBindQuery(&pagination); err != nil {
-		middleware.HandleError(c, err)
-		return
-	}
-
-	viewerID := middleware.GetUserIDPtr(c)
-
-	response, err := h.userService.SearchUsers(query, &pagination, viewerID)
+	page := utils.GetQueryInt(c, "page", 1)
+	pageSize := utils.GetQueryInt(c, "page_size", 20)
+	users, total, err := h.userService.SearchUsers(query, page, pageSize)
 	if err != nil {
-		middleware.HandleError(c, err)
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-
-	c.JSON(http.StatusOK, response)
+	hasMore := utils.CalculateHasMore(total, page, pageSize)
+	c.JSON(200, gin.H{
+		"users": users,
+		"total_count": total,
+		"page": page,
+		"page_size": pageSize,
+		"has_more": hasMore,
+	})
 }
 
 // GetUserStats godoc

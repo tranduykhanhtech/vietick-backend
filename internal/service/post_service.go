@@ -2,6 +2,8 @@ package service
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 
 	"vietick-backend/internal/model"
 	"vietick-backend/internal/repository"
@@ -19,6 +21,21 @@ func NewPostService(postRepo *repository.PostRepository) *PostService {
 	}
 }
 
+func extractHashtags(content string) []string {
+	hashtagRegex := regexp.MustCompile(`#([\p{L}0-9_]+)`)
+	matches := hashtagRegex.FindAllStringSubmatch(content, -1)
+	unique := map[string]struct{}{}
+	for _, m := range matches {
+		tag := strings.ToLower(m[1])
+		unique[tag] = struct{}{}
+	}
+	result := make([]string, 0, len(unique))
+	for tag := range unique {
+		result = append(result, tag)
+	}
+	return result
+}
+
 func (s *PostService) CreatePost(userID string, req *model.CreatePostRequest) (*model.Post, error) {
 	post := &model.Post{
 		ID: uuid.New().String(),
@@ -32,7 +49,15 @@ func (s *PostService) CreatePost(userID string, req *model.CreatePostRequest) (*
 		return nil, fmt.Errorf("failed to create post: %w", err)
 	}
 
-	// Get the complete post with user information
+	// Xử lý hashtag
+	hashtags := extractHashtags(req.Content)
+	if len(hashtags) > 0 {
+		err = s.postRepo.AddHashtagsToPost(post.ID, hashtags)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add hashtags: %w", err)
+		}
+	}
+
 	return s.postRepo.GetByID(post.ID, &userID)
 }
 
@@ -68,7 +93,24 @@ func (s *PostService) UpdatePost(postID, userID string, req *model.UpdatePostReq
 		return nil, fmt.Errorf("failed to update post: %w", err)
 	}
 
-	// Get the updated post
+	// Xử lý hashtag (cập nhật lại toàn bộ hashtag cho post)
+	hashtags := extractHashtags(req.Content)
+	if len(hashtags) > 0 {
+		err = s.postRepo.ClearPostHashtags(postID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to clear old hashtags: %w", err)
+		}
+		err = s.postRepo.AddHashtagsToPost(postID, hashtags)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add hashtags: %w", err)
+		}
+	} else {
+		err = s.postRepo.ClearPostHashtags(postID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to clear old hashtags: %w", err)
+		}
+	}
+
 	return s.postRepo.GetByID(postID, &userID)
 }
 
@@ -188,12 +230,52 @@ func (s *PostService) GetPostStats(postID string) (map[string]interface{}, error
 	return stats, nil
 }
 
-func (s *PostService) SearchPosts(query string, userID *string, pagination *utils.PaginationParams) (*model.PostsResponse, error) {
+func (s *PostService) SearchPosts(query string, page, pageSize int) (*model.PostsResponse, error) {
+	posts, totalCount, err := s.postRepo.SearchPosts(query, page, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	hasMore := utils.CalculateHasMore(totalCount, page, pageSize)
 	return &model.PostsResponse{
-		Posts:      []model.Post{},
-		TotalCount: 0,
-		Page:       pagination.Calculate().Page,
-		PageSize:   pagination.Calculate().PageSize,
-		HasMore:    false,
+		Posts:      posts,
+		TotalCount: totalCount,
+		Page:       page,
+		PageSize:   pageSize,
+		HasMore:    hasMore,
 	}, nil
+}
+
+// SearchPostsByContent chỉ theo content
+func (s *PostService) SearchPostsByContent(query string, page, pageSize int) (*model.PostsResponse, error) {
+	posts, totalCount, err := s.postRepo.SearchPostsByContent(query, page, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	hasMore := utils.CalculateHasMore(totalCount, page, pageSize)
+	return &model.PostsResponse{
+		Posts:      posts,
+		TotalCount: totalCount,
+		Page:       page,
+		PageSize:   pageSize,
+		HasMore:    hasMore,
+	}, nil
+}
+
+// Lấy danh sách hashtag của post
+func (s *PostService) GetHashtagsByPost(postID string) ([]model.Hashtag, error) {
+	return s.postRepo.GetHashtagsByPost(postID)
+}
+
+// Lấy danh sách post theo hashtag
+func (s *PostService) GetPostsByHashtag(hashtag string, limit, offset int) ([]model.Post, error) {
+	return s.postRepo.GetPostsByHashtag(hashtag, limit, offset)
+}
+
+func (s *PostService) SearchHashtags(query string, page, pageSize int) ([]model.Hashtag, int64, bool, error) {
+	hashtags, totalCount, err := s.postRepo.SearchHashtags(query, page, pageSize)
+	if err != nil {
+		return nil, 0, false, err
+	}
+	hasMore := utils.CalculateHasMore(totalCount, page, pageSize)
+	return hashtags, totalCount, hasMore, nil
 }

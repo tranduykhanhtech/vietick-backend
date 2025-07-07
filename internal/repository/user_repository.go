@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"vietick-backend/internal/model"
-	"vietick-backend/internal/utils"
 
 	"gorm.io/gorm"
 )
@@ -126,36 +125,20 @@ func (r *UserRepository) GetProfile(userID string, viewerID *string) (*model.Use
 	return profile, nil
 }
 
-func (r *UserRepository) SearchUsers(query string, pagination utils.PaginationResult) ([]model.UserProfile, int64, error) {
-	searchQuery := `
-		SELECT u.id, u.username, u.full_name, u.bio, u.avatar_url, u.is_verified, u.created_at,
-		       (SELECT COUNT(*) FROM follows WHERE following_id = u.id) as followers_count,
-		       (SELECT COUNT(*) FROM follows WHERE follower_id = u.id) as following_count,
-		       (SELECT COUNT(*) FROM posts WHERE user_id = u.id) as posts_count
-		FROM users u 
-		WHERE u.username LIKE ? OR u.full_name LIKE ?
-		ORDER BY u.is_verified DESC, u.created_at DESC
-		LIMIT ? OFFSET ?
-	`
-	countQuery := `
-		SELECT COUNT(*) 
-		FROM users u 
-		WHERE u.username LIKE ? OR u.full_name LIKE ?
-	`
-	searchPattern := "%" + query + "%"
-
-	// Get total count
+func (r *UserRepository) SearchUsers(query string, page, pageSize int) ([]model.User, int64, error) {
+	var users []model.User
 	var totalCount int64
-	if err := r.db.Raw(countQuery, searchPattern, searchPattern).Scan(&totalCount).Error; err != nil {
-		return nil, 0, fmt.Errorf("failed to count users: %w", err)
+	q := "%" + query + "%"
+	db := r.db.Model(&model.User{}).
+		Where("username LIKE ? OR full_name LIKE ? OR email LIKE ?", q, q, q)
+	db.Count(&totalCount)
+	err := db.Order("created_at DESC").
+		Limit(pageSize).
+		Offset((page-1)*pageSize).
+		Find(&users).Error
+	if err != nil {
+		return nil, 0, err
 	}
-
-	// Get users
-	var users []model.UserProfile
-	if err := r.db.Raw(searchQuery, searchPattern, searchPattern, pagination.Limit, pagination.Offset).Scan(&users).Error; err != nil {
-		return nil, 0, fmt.Errorf("failed to search users: %w", err)
-	}
-
 	return users, totalCount, nil
 }
 

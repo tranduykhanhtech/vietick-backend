@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 )
 
 type Config struct {
@@ -15,6 +16,7 @@ type Config struct {
 	JWT      JWTConfig
 	Email    EmailConfig
 	CORS     CORSConfig
+	Redis    RedisConfig
 }
 
 type ServerConfig struct {
@@ -50,6 +52,13 @@ type CORSConfig struct {
 	AllowedOrigins []string
 }
 
+type RedisConfig struct {
+	Addr     string
+	Username string
+	Password string
+	DB       int
+}
+
 func Load() *Config {
 	// Load .env file if it exists
 	if err := godotenv.Load(); err != nil {
@@ -59,6 +68,7 @@ func Load() *Config {
 	smtpPort, _ := strconv.Atoi(getEnv("SMTP_PORT", "587"))
 	accessExpiryHour, _ := strconv.Atoi(getEnv("JWT_ACCESS_EXPIRY_HOUR", "24"))
 	refreshExpiryDay, _ := strconv.Atoi(getEnv("JWT_REFRESH_EXPIRY_DAY", "7"))
+	redisDB, _ := strconv.Atoi(getEnv("REDIS_DB", "0"))
 
 	return &Config{
 		Server: ServerConfig{
@@ -99,6 +109,12 @@ func Load() *Config {
 				",",
 			),
 		},
+		Redis: RedisConfig{
+			Addr:     getEnv("REDIS_ADDR", "localhost:6379"),
+			Username: getEnv("REDIS_USERNAME", ""),
+			Password: getEnv("REDIS_PASSWORD", ""),
+			DB:       redisDB,
+		},
 	}
 }
 
@@ -115,4 +131,13 @@ func getEnvAsSlice(key string, defaultVal []string, separator string) []string {
 		return defaultVal
 	}
 	return strings.Split(valStr, separator)
+}
+
+func (c *Config) GetRedisOptions() *redis.Options {
+	return &redis.Options{
+		Addr:     c.Redis.Addr,
+		Username: c.Redis.Username,
+		Password: c.Redis.Password,
+		DB:       c.Redis.DB,
+	}
 }

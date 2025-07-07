@@ -59,6 +59,10 @@ func main() {
 	emailService := email.NewEmailService(&cfg.Email)
 	log.Println("Email service initialized")
 
+	// Initialize Redis client
+	// redisClient := redis.NewClient(cfg.GetRedisOptions())
+	// log.Println("Redis client initialized")
+
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
 	authRepo := repository.NewAuthRepository(db)
@@ -144,20 +148,6 @@ func setupRouter(
 		})
 	})
 
-	// Main website welcome page
-	// Use HTML rendering
-	router.LoadHTMLFiles("templates/index.html")
-
-	// Serve static files (css, js, images, ...) from templates folder
-	router.Static("/static", "./static")
-
-	router.GET("/", func(c *gin.Context) {
-		c.HTML(200, "index.html", gin.H{
-			"title":   "Welcome to VietTick Backend",
-			"version": version,
-		})
-	})
-
 	// API v1 routes
 	v1 := router.Group("/api/v1")
 	{
@@ -178,6 +168,14 @@ func setupRouter(
 			public.GET("/users/check-username", userHandler.CheckUsernameAvailability)
 			public.GET("/users/check-email", userHandler.CheckEmailAvailability)
 			public.GET("/verification/requirements", verificationHandler.GetVerificationRequirements)
+
+			// Search routes
+			searchGroup := public.Group("/search")
+			{
+				searchGroup.GET("/posts", postHandler.SearchPosts)
+				searchGroup.GET("/hashtags", postHandler.SearchHashtags)
+				searchGroup.GET("/users", userHandler.SearchUsers)
+			}
 		}
 
 		// Protected routes (authentication required)
@@ -248,6 +246,12 @@ func setupRouter(
 				// Comment routes
 				postGroup.POST("/:id/comments", commentHandler.CreateComment)
 				postGroup.GET("/:id/comments", commentHandler.GetPostComments)
+
+				// Hashtag routes
+				hashtagGroup := postGroup.Group("/hashtags")
+				{
+					hashtagGroup.GET(":name/posts", postHandler.GetPostsByHashtag)
+				}
 			}
 
 			// Comment routes

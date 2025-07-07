@@ -1,6 +1,10 @@
 package utils
 
-import "math"
+import (
+	"math"
+	"strconv"
+	"github.com/gin-gonic/gin"
+)
 
 type PaginationParams struct {
 	Page     int `form:"page,default=1" binding:"min=1"`
@@ -38,4 +42,17 @@ func (p *PaginationParams) Calculate() PaginationResult {
 func CalculateHasMore(totalCount int64, page, pageSize int) bool {
 	totalPages := int64(math.Ceil(float64(totalCount) / float64(pageSize)))
 	return int64(page) < totalPages
+}
+
+// GetQueryInt lấy giá trị int từ query, có giá trị mặc định nếu không hợp lệ
+func GetQueryInt(c *gin.Context, key string, defaultVal int) int {
+	valStr := c.Query(key)
+	if valStr == "" {
+		return defaultVal
+	}
+	val, err := strconv.Atoi(valStr)
+	if err != nil {
+		return defaultVal
+	}
+	return val
 }

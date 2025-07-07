@@ -54,13 +54,19 @@ func (h *PostHandler) CreatePost(c *gin.Context) {
 	c.JSON(http.StatusCreated, post)
 }
 
+// Định nghĩa response trả về post kèm hashtag
+type PostWithHashtags struct {
+	model.Post
+	Hashtags []model.Hashtag `json:"hashtags"`
+}
+
 // GetPost godoc
 // @Summary Get a post
 // @Description Get a post by ID
 // @Tags posts
 // @Produce json
 // @Param id path string true "Post ID"
-// @Success 200 {object} model.Post
+// @Success 200 {object} PostWithHashtags
 // @Failure 404 {object} middleware.ErrorResponse
 // @Security BearerAuth
 // @Router /posts/{id} [get]
@@ -79,7 +85,18 @@ func (h *PostHandler) GetPost(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, post)
+	hashtags, err := h.postService.GetHashtagsByPost(postID)
+	if err != nil {
+		middleware.HandleError(c, err)
+		return
+	}
+
+	resp := PostWithHashtags{
+		Post:     *post,
+		Hashtags: hashtags,
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 // UpdatePost godoc
@@ -412,26 +429,69 @@ func (h *PostHandler) GetPostStats(c *gin.Context) {
 
 // SearchPosts godoc
 // @Summary Search posts
-// @Description Search posts by content
-// @Tags posts
+// @Description Search posts by content, hashtag, username, full_name
+// @Tags search
 // @Produce json
-// @Param q query string true "Search query"
+// @Param query query string true "Search keyword"
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
 // @Success 200 {object} model.PostsResponse
-// @Failure 400 {object} middleware.ErrorResponse
-// @Security BearerAuth
-// @Router /posts/search [get]
+// @Router /search/posts [get]
 func (h *PostHandler) SearchPosts(c *gin.Context) {
-	query := c.Query("q")
+	query := c.Query("query")
 	if query == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Search query is required",
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing query parameter"})
 		return
 	}
+	page := utils.GetQueryInt(c, "page", 1)
+	pageSize := utils.GetQueryInt(c, "page_size", 20)
+	resp, err := h.postService.SearchPosts(query, page, pageSize)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
 
-	userID := middleware.GetUserIDPtr(c)
+// SearchHashtags godoc
+// @Summary Search hashtags
+// @Description Search hashtags by name
+// @Tags search
+// @Produce json
+// @Param query query string true "Search keyword"
+// @Param page query int false "Page number" default(1)
+// @Param page_size query int false "Page size" default(20)
+// @Success 200 {object} map[string]interface{}
+// @Router /search/hashtags [get]
+func (h *PostHandler) SearchHashtags(c *gin.Context) {
+	query := c.Query("query")
+	if query == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing query parameter"})
+		return
+	}
+	page := utils.GetQueryInt(c, "page", 1)
+	pageSize := utils.GetQueryInt(c, "page_size", 20)
+	hashtags, total, hasMore, err := h.postService.SearchHashtags(query, page, pageSize)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"hashtags": hashtags,
+		"total_count": total,
+		"page": page,
+		"page_size": pageSize,
+		"has_more": hasMore,
+	})
+}
+
+// Lấy danh sách post theo hashtag
+func (h *PostHandler) GetPostsByHashtag(c *gin.Context) {
+	hashtag := c.Param("name")
+	if hashtag == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid hashtag"})
+		return
+	}
 
 	var pagination utils.PaginationParams
 	if err := c.ShouldBindQuery(&pagination); err != nil {
@@ -439,11 +499,14 @@ func (h *PostHandler) SearchPosts(c *gin.Context) {
 		return
 	}
 
-	response, err := h.postService.SearchPosts(query, userID, &pagination)
+	posts, err := h.postService.GetPostsByHashtag(hashtag, pagination.PageSize, (pagination.Page-1)*pagination.PageSize)
 	if err != nil {
 		middleware.HandleError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, gin.H{
+		"posts":   posts,
+		"hashtag": hashtag,
+	})
 }

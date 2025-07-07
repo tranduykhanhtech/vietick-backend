@@ -2,11 +2,13 @@ package repository
 
 import (
 	"fmt"
+	"time"
 
 	"vietick-backend/internal/model"
 	"vietick-backend/internal/utils"
 
 	"gorm.io/gorm"
+	"github.com/google/uuid"
 )
 
 type PostRepository struct {
@@ -134,4 +136,127 @@ func (r *PostRepository) IsPostLikedByUser(postID, userID string) (bool, error) 
 		return false, fmt.Errorf("failed to check if post is liked: %w", err)
 	}
 	return count > 0, nil
+}
+
+// Hashtag repository methods
+func (r *PostRepository) FindOrCreateHashtag(name string) (*model.Hashtag, error) {
+	hashtag := &model.Hashtag{}
+	err := r.db.Where("name = ?", name).First(hashtag).Error
+	if err == nil {
+		return hashtag, nil
+	}
+	if err.Error() == "record not found" || err.Error() == "gorm: record not found" {
+		hashtag.ID = uuid.New().String()
+		hashtag.Name = name
+		hashtag.CreatedAt = time.Now()
+		if err := r.db.Create(hashtag).Error; err != nil {
+			return nil, err
+		}
+		return hashtag, nil
+	}
+	return nil, err
+}
+
+func (r *PostRepository) AddHashtagsToPost(postID string, hashtagNames []string) error {
+	for _, name := range hashtagNames {
+		hashtag, err := r.FindOrCreateHashtag(name)
+		if err != nil {
+			return err
+		}
+		postHashtag := &model.PostHashtag{
+			PostID:    postID,
+			HashtagID: hashtag.ID,
+			CreatedAt: time.Now(),
+		}
+		// Sử dụng INSERT IGNORE để tránh duplicate
+		err = r.db.Exec("INSERT IGNORE INTO post_hashtags (post_id, hashtag_id, created_at) VALUES (?, ?, ?)", postID, hashtag.ID, postHashtag.CreatedAt).Error
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *PostRepository) GetHashtagsByPost(postID string) ([]model.Hashtag, error) {
+	var hashtags []model.Hashtag
+	err := r.db.Raw(`SELECT h.* FROM hashtags h JOIN post_hashtags ph ON h.id = ph.hashtag_id WHERE ph.post_id = ?`, postID).Scan(&hashtags).Error
+	if err != nil {
+		return nil, err
+	}
+	return hashtags, nil
+}
+
+func (r *PostRepository) GetPostsByHashtag(hashtagName string, limit, offset int) ([]model.Post, error) {
+	var posts []model.Post
+	err := r.db.Raw(`SELECT p.* FROM posts p JOIN post_hashtags ph ON p.id = ph.post_id JOIN hashtags h ON ph.hashtag_id = h.id WHERE h.name = ? ORDER BY p.created_at DESC LIMIT ? OFFSET ?`, hashtagName, limit, offset).Scan(&posts).Error
+	if err != nil {
+		return nil, err
+	}
+	return posts, nil
+}
+
+// SearchPosts tìm kiếm post theo content, hashtag, username, full_name
+func (r *PostRepository) SearchPosts(query string, page, pageSize int) ([]model.Post, int64, error) {
+	var posts []model.Post
+	var totalCount int64
+	q := "%" + query + "%"
+
+	db := r.db.Table("posts p").
+		Select("DISTINCT p.*").
+		Joins("LEFT JOIN users u ON p.user_id = u.id").
+		Joins("LEFT JOIN post_hashtags ph ON p.id = ph.post_id").
+		Joins("LEFT JOIN hashtags h ON ph.hashtag_id = h.id").
+		Where("p.content LIKE ? OR h.name LIKE ? OR u.username LIKE ? OR u.full_name LIKE ?", q, q, q, q)
+
+	db.Count(&totalCount)
+
+	err := db.Order("p.created_at DESC").
+		Limit(pageSize).
+		Offset((page-1)*pageSize).
+		Scan(&posts).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return posts, totalCount, nil
+}
+
+// SearchHashtags tìm kiếm hashtag theo tên
+func (r *PostRepository) SearchHashtags(query string, page, pageSize int) ([]model.Hashtag, int64, error) {
+	var hashtags []model.Hashtag
+	var totalCount int64
+	q := "%" + query + "%"
+	db := r.db.Model(&model.Hashtag{}).
+		Where("name LIKE ?", q)
+	db.Count(&totalCount)
+	err := db.Order("created_at DESC").
+		Limit(pageSize).
+		Offset((page-1)*pageSize).
+		Find(&hashtags).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return hashtags, totalCount, nil
+}
+
+// SearchPostsByContent tìm kiếm post chỉ theo nội dung content
+func (r *PostRepository) SearchPostsByContent(query string, page, pageSize int) ([]model.Post, int64, error) {
+	var posts []model.Post
+	var totalCount int64
+	q := "%" + query + "%"
+	db := r.db.Model(&model.Post{}).
+		Where("content LIKE ?", q)
+	db.Count(&totalCount)
+	err := db.Order("created_at DESC").
+		Limit(pageSize).
+		Offset((page-1)*pageSize).
+		Find(&posts).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return posts, totalCount, nil
+}
+
+// Xóa tất cả hashtag liên kết với post
+func (r *PostRepository) ClearPostHashtags(postID string) error {
+	return r.db.Exec("DELETE FROM post_hashtags WHERE post_id = ?", postID).Error
 }

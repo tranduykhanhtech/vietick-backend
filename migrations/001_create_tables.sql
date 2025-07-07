@@ -127,3 +127,23 @@ CREATE TABLE identity_verifications (
     INDEX idx_status (status),
     INDEX idx_submitted_at (submitted_at)
 );
+
+-- Hashtags table
+CREATE TABLE hashtags (
+    id CHAR(36) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_name (name)
+);
+
+-- Post-Hashtag mapping table (many-to-many)
+CREATE TABLE post_hashtags (
+    post_id CHAR(36) NOT NULL,
+    hashtag_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (post_id, hashtag_id),
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (hashtag_id) REFERENCES hashtags(id) ON DELETE CASCADE,
+    INDEX idx_post_id (post_id),
+    INDEX idx_hashtag_id (hashtag_id)
+);

@@ -72,3 +72,15 @@ type PostsResponse struct {
 	PageSize   int    `json:"page_size"`
 	HasMore    bool   `json:"has_more"`
 }
+
+type Hashtag struct {
+	ID        string    `json:"id" db:"id"`
+	Name      string    `json:"name" db:"name"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
+
+type PostHashtag struct {
+	PostID    string    `json:"post_id" db:"post_id"`
+	HashtagID string    `json:"hashtag_id" db:"hashtag_id"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}

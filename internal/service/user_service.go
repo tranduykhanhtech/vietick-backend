@@ -64,34 +64,8 @@ func (s *UserService) UpdateProfile(userID string, req *model.UpdateProfileReque
 	return s.GetProfile(userID, nil)
 }
 
-func (s *UserService) SearchUsers(query string, pagination *utils.PaginationParams, viewerID *string) (*model.FollowersResponse, error) {
-	paginationResult := pagination.Calculate()
-	
-	users, totalCount, err := s.userRepo.SearchUsers(query, paginationResult)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search users: %w", err)
-	}
-
-	// If viewer is provided, get follow relationships
-	if viewerID != nil {
-		for i := range users {
-			isFollowing, _ := s.followRepo.IsFollowing(*viewerID, users[i].ID)
-			users[i].IsFollowing = isFollowing
-			
-			isFollowedBy, _ := s.followRepo.IsFollowing(users[i].ID, *viewerID)
-			users[i].IsFollowedBy = isFollowedBy
-		}
-	}
-
-	hasMore := utils.CalculateHasMore(totalCount, paginationResult.Page, paginationResult.PageSize)
-
-	return &model.FollowersResponse{
-		Users:      users,
-		TotalCount: totalCount,
-		Page:       paginationResult.Page,
-		PageSize:   paginationResult.PageSize,
-		HasMore:    hasMore,
-	}, nil
+func (s *UserService) SearchUsers(query string, page, pageSize int) ([]model.User, int64, error) {
+	return s.userRepo.SearchUsers(query, page, pageSize)
 }
 
 func (s *UserService) GetUserByID(userID string) (*model.User, error) {
@@ -204,50 +178,12 @@ func (s *UserService) UpdateEmail(userID string, newEmail string) error {
 	return nil
 }
 
-func (s *UserService) GetRecommendedUsers(userID string, limit int) ([]model.UserProfile, error) {
-	// This is a simple implementation. In a real application, you might want to
-	// implement more sophisticated recommendation algorithms based on:
-	// - Mutual follows
-	// - Similar interests
-	// - Popular users
-	// - Geographic location
-	// - Activity patterns
-
-	pagination := utils.PaginationResult{
-		Offset:   0,
-		Limit:    limit,
-		Page:     1,
-		PageSize: limit,
-	}
-
-	// For now, get recent verified users that the current user doesn't follow
-	users, _, err := s.userRepo.SearchUsers("", pagination)
+func (s *UserService) GetRecommendedUsers(userID string, limit int) ([]model.User, error) {
+	users, _, err := s.userRepo.SearchUsers("", 1, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get recommended users: %w", err)
 	}
-
-	// Filter out current user and users already followed
-	var recommendations []model.UserProfile
-
-	for _, user := range users {
-		if user.ID == userID {
-			continue
-		}
-
-		isFollowing, _ := s.followRepo.IsFollowing(userID, user.ID)
-		if isFollowing {
-			continue
-		}
-
-		user.IsFollowing = false
-		recommendations = append(recommendations, user)
-
-		if len(recommendations) >= limit {
-			break
-		}
-	}
-
-	return recommendations, nil
+	return users, nil
 }
 
 func (s *UserService) GetUserStats(userID string) (map[string]interface{}, error) {
